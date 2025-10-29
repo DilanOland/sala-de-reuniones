@@ -81,6 +81,34 @@
             font-weight: 400;
         }
         
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--light-gray);
+            padding: 10px 15px;
+            border-radius: 25px;
+        }
+        
+        .user-avatar {
+            width: 35px;
+            height: 35px;
+            background: var(--dark-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--white);
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
         .current-date {
             font-size: 15px;
             color: var(--text-light);
@@ -88,6 +116,72 @@
             padding: 10px 20px;
             border-radius: 30px;
             font-weight: 500;
+        }
+        
+        /* Modal de Identificación */
+        .auth-modal {
+            display: flex;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(11, 34, 64, 0.9);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        
+        .auth-content {
+            background: var(--white);
+            border-radius: var(--radius);
+            padding: 40px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+        
+        .auth-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--dark-blue), #1a365d);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--white);
+            font-size: 32px;
+            margin: 0 auto 20px;
+        }
+        
+        .auth-content h2 {
+            color: var(--dark-blue);
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .auth-content p {
+            color: var(--text-light);
+            margin-bottom: 25px;
+        }
+        
+        .auth-input {
+            width: 100%;
+            padding: 15px 20px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .auth-input:focus {
+            outline: none;
+            border-color: var(--dark-blue);
+            box-shadow: 0 0 0 3px rgba(11, 34, 64, 0.1);
         }
         
         /* Layout Principal */
@@ -199,6 +293,17 @@
             box-shadow: 0 6px 20px rgba(11, 34, 64, 0.15);
         }
         
+        .btn-outline {
+            background: transparent;
+            border: 1.5px solid var(--dark-blue);
+            color: var(--dark-blue);
+        }
+        
+        .btn-outline:hover {
+            background: var(--dark-blue);
+            color: var(--white);
+        }
+        
         /* Lista de Reservas */
         .reservations-list {
             margin-top: 20px;
@@ -260,6 +365,24 @@
             gap: 6px;
         }
         
+        .reservation-owner {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: var(--text-light);
+        }
+        
+        .owner-badge {
+            background: var(--dark-blue);
+            color: var(--white);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
         .cancel-btn {
             background: transparent;
             color: var(--red);
@@ -278,6 +401,14 @@
         .cancel-btn:hover {
             background: var(--red);
             color: var(--white);
+        }
+        
+        .cancel-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: transparent;
+            color: var(--text-light);
+            border-color: var(--text-light);
         }
         
         /* Indicadores de Estado */
@@ -619,6 +750,11 @@
                 gap: 15px;
             }
             
+            .user-section {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
             .form-row {
                 grid-template-columns: 1fr;
             }
@@ -655,7 +791,22 @@
         <span id="notification-message"></span>
     </div>
     
-    <div class="app-container">
+    <!-- Modal de Identificación -->
+    <div class="auth-modal" id="auth-modal">
+        <div class="auth-content">
+            <div class="auth-icon">
+                <i class="fas fa-user"></i>
+            </div>
+            <h2>Identifícate</h2>
+            <p>Ingresa tu nombre para gestionar tus reservas</p>
+            <input type="text" class="auth-input" id="user-name" placeholder="Tu nombre completo" maxlength="50">
+            <button class="btn" id="login-btn">
+                <i class="fas fa-sign-in-alt"></i> Ingresar al Sistema
+            </button>
+        </div>
+    </div>
+
+    <div class="app-container" id="main-app" style="display: none;">
         <header class="header">
             <div class="logo-section">
                 <div class="logo">
@@ -666,7 +817,16 @@
                     <p>Sistema de Gestión de Reservas</p>
                 </div>
             </div>
-            <div class="current-date" id="current-date">Cargando fecha...</div>
+            <div class="user-section">
+                <div class="user-info">
+                    <div class="user-avatar" id="user-avatar">U</div>
+                    <span id="user-display-name">Usuario</span>
+                </div>
+                <div class="current-date" id="current-date">Cargando fecha...</div>
+                <button class="btn btn-outline" id="logout-btn" style="width: auto; padding: 10px 15px;">
+                    <i class="fas fa-sign-out-alt"></i> Salir
+                </button>
+            </div>
         </header>
 
         <div class="main-content">
@@ -691,10 +851,6 @@
                             <label for="end-time">Hora de fin</label>
                             <input type="time" id="end-time" min="09:00" max="17:30" step="1800" required>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="responsible">Responsable</label>
-                        <input type="text" id="responsible" placeholder="Nombre del responsable" required>
                     </div>
                     <div class="form-group">
                         <label for="department">Departamento</label>
@@ -808,7 +964,7 @@
     <footer>
         <div class="app-container">
             <p>Sistema de Gestión de Sala de Reuniones - Oland Seguros &copy; 2023</p>
-            <p>Todos los empleados con acceso a este enlace pueden ver y gestionar las reservas</p>
+            <p>Solo puedes cancelar las reservas que hayas creado tú</p>
         </div>
     </footer>
 
@@ -822,11 +978,83 @@
         // Inicializar Supabase
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
-        // Variables globales para el calendario
+        // Variables globales
         let currentMonth = new Date().getMonth();
         let currentYear = new Date().getFullYear();
         let reservations = [];
-        
+        let currentUser = null;
+
+        // Función para inicializar el usuario
+        function initializeUser() {
+            const savedUser = localStorage.getItem('oland-user');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                showMainApp();
+            } else {
+                showAuthModal();
+            }
+        }
+
+        // Función para mostrar el modal de autenticación
+        function showAuthModal() {
+            document.getElementById('auth-modal').style.display = 'flex';
+            document.getElementById('main-app').style.display = 'none';
+        }
+
+        // Función para mostrar la aplicación principal
+        function showMainApp() {
+            document.getElementById('auth-modal').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            
+            // Actualizar interfaz de usuario
+            document.getElementById('user-display-name').textContent = currentUser.name;
+            document.getElementById('user-avatar').textContent = currentUser.name.charAt(0).toUpperCase();
+            
+            // Cargar datos
+            updateCurrentDate();
+            displayTodayReservations();
+            generateCalendar();
+            generateTimeSlots();
+        }
+
+        // Función para hacer login
+        function loginUser(userName) {
+            if (!userName.trim()) {
+                showNotification('Por favor ingresa tu nombre', 'error');
+                return;
+            }
+
+            currentUser = {
+                id: generateUserId(),
+                name: userName.trim(),
+                loginTime: new Date().toISOString()
+            };
+
+            localStorage.setItem('oland-user', JSON.stringify(currentUser));
+            showMainApp();
+            showNotification(`Bienvenido/a, ${userName}!`, 'success');
+        }
+
+        // Función para generar un ID único de usuario
+        function generateUserId() {
+            return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
+        }
+
+        // Función para hacer logout
+        function logoutUser() {
+            if (confirm('¿Estás seguro de que quieres salir?')) {
+                currentUser = null;
+                localStorage.removeItem('oland-user');
+                showAuthModal();
+                showNotification('Has salido del sistema', 'success');
+            }
+        }
+
+        // Función para verificar si el usuario actual es el propietario de una reserva
+        function isReservationOwner(reservation) {
+            return currentUser && reservation.user_id === currentUser.id;
+        }
+
         // Función para formatear hora en formato legible
         function formatTime(timeString) {
             const [hours, minutes] = timeString.split(':');
@@ -840,15 +1068,12 @@
         function generateTimeOptions() {
             const times = [];
             for (let hour = 8; hour <= 17; hour++) {
-                // Para las 8:00 solo permitimos 8:30
                 if (hour === 8) {
                     times.push('08:30');
                     continue;
                 }
                 
-                // Para las demás horas, generamos :00 y :30
                 for (let minute = 0; minute < 60; minute += 30) {
-                    // Para las 17:00 solo permitimos hasta 17:30
                     if (hour === 17 && minute === 30) {
                         times.push('17:30');
                         break;
@@ -980,6 +1205,7 @@
             
             container.innerHTML = '';
             todayReservations.forEach(reservation => {
+                const isOwner = isReservationOwner(reservation);
                 const reservationElement = document.createElement('div');
                 reservationElement.className = 'reservation-item';
                 reservationElement.innerHTML = `
@@ -989,9 +1215,14 @@
                         <div class="reservation-time">
                             <i class="far fa-clock"></i> ${formatTime(reservation.start_time)} - ${formatTime(reservation.end_time)}
                         </div>
+                        <div class="reservation-owner">
+                            <i class="fas fa-user"></i>
+                            Reservado por: ${reservation.responsible}
+                            ${isOwner ? '<span class="owner-badge">Tú</span>' : ''}
+                        </div>
                     </div>
-                    <button class="cancel-btn" onclick="cancelReservation(${reservation.id})">
-                        <i class="fas fa-times"></i> Cancelar
+                    <button class="cancel-btn" ${!isOwner ? 'disabled' : ''} onclick="cancelReservation(${reservation.id})">
+                        <i class="fas fa-times"></i> ${isOwner ? 'Cancelar' : 'No disponible'}
                     </button>
                 `;
                 container.appendChild(reservationElement);
@@ -1078,6 +1309,7 @@
             } else {
                 let html = '<div class="reservations-list">';
                 dayReservations.forEach(reservation => {
+                    const isOwner = isReservationOwner(reservation);
                     html += `
                         <div class="reservation-item">
                             <div class="reservation-info">
@@ -1086,9 +1318,14 @@
                                 <div class="reservation-time">
                                     <i class="far fa-clock"></i> ${formatTime(reservation.start_time)} - ${formatTime(reservation.end_time)}
                                 </div>
+                                <div class="reservation-owner">
+                                    <i class="fas fa-user"></i>
+                                    Reservado por: ${reservation.responsible}
+                                    ${isOwner ? '<span class="owner-badge">Tú</span>' : ''}
+                                </div>
                             </div>
-                            <button class="cancel-btn" onclick="cancelReservation(${reservation.id}); closeModal();">
-                                <i class="fas fa-times"></i> Cancelar
+                            <button class="cancel-btn" ${!isOwner ? 'disabled' : ''} onclick="cancelReservation(${reservation.id}); closeModal();">
+                                <i class="fas fa-times"></i> ${isOwner ? 'Cancelar' : 'No disponible'}
                             </button>
                         </div>
                     `;
@@ -1165,6 +1402,22 @@
         
         // Función para cancelar una reserva
         async function cancelReservation(id) {
+            if (!currentUser) {
+                showNotification('Debes identificarte para cancelar reservas', 'error');
+                return;
+            }
+
+            const reservation = reservations.find(r => r.id === id);
+            if (!reservation) {
+                showNotification('Reserva no encontrada', 'error');
+                return;
+            }
+
+            if (!isReservationOwner(reservation)) {
+                showNotification('Solo puedes cancelar tus propias reservas', 'error');
+                return;
+            }
+
             if (confirm('¿Está seguro de que desea cancelar esta reserva?')) {
                 try {
                     await deleteReservation(id);
@@ -1183,10 +1436,14 @@
         document.getElementById('reservation-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            if (!currentUser) {
+                showNotification('Debes identificarte para hacer reservas', 'error');
+                return;
+            }
+            
             const date = document.getElementById('reservation-date').value;
             const startTime = document.getElementById('start-time').value;
             const endTime = document.getElementById('end-time').value;
-            const responsible = document.getElementById('responsible').value;
             const department = document.getElementById('department').value;
             const purpose = document.getElementById('purpose').value;
             
@@ -1217,9 +1474,10 @@
                 date: date,
                 start_time: startTime,
                 end_time: endTime,
-                responsible: responsible,
+                responsible: currentUser.name,
                 department: department,
-                purpose: purpose
+                purpose: purpose,
+                user_id: currentUser.id // Guardar el ID del usuario que crea la reserva
             };
             
             try {
@@ -1245,10 +1503,23 @@
         
         // Inicializar la aplicación
         document.addEventListener('DOMContentLoaded', function() {
-            updateCurrentDate();
-            displayTodayReservations();
-            generateCalendar();
-            generateTimeSlots();
+            // Configurar eventos de autenticación
+            document.getElementById('login-btn').addEventListener('click', function() {
+                const userName = document.getElementById('user-name').value;
+                loginUser(userName);
+            });
+
+            document.getElementById('user-name').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const userName = document.getElementById('user-name').value;
+                    loginUser(userName);
+                }
+            });
+
+            document.getElementById('logout-btn').addEventListener('click', logoutUser);
+
+            // Inicializar usuario
+            initializeUser();
             
             // Establecer la fecha mínima en el formulario como hoy
             const today = new Date().toISOString().split('T')[0];
