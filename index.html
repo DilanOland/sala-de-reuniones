@@ -731,7 +731,7 @@
             font-size: 14px;
         }
         
-        /* Notificaciones */
+        /* Notificaciones - Z-INDEX CORREGIDO */
         .notification {
             position: fixed;
             top: 30px;
@@ -740,7 +740,7 @@
             border-radius: 10px;
             color: var(--white);
             font-weight: 500;
-            z-index: 1001;
+            z-index: 3000; /* Aumentado de 1001 a 3000 */
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             display: none;
             align-items: center;
@@ -1070,7 +1070,7 @@
 
     <footer>
         <div class="app-container">
-            <p>Sistema de Gestión de Sala de Reuniones - Oland Seguros &copy; 2025</p>
+            <p>Sistema de Gestión de Sala de Reuniones - Oland Seguros &copy; 2024</p>
             <p>Solo puedes cancelar las reservas que hayas creado tú</p>
         </div>
     </footer>
