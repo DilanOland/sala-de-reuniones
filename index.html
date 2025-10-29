@@ -429,7 +429,7 @@
         
         .time-slots {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
             gap: 10px;
             margin-top: 18px;
         }
@@ -685,11 +685,11 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="start-time">Hora de inicio</label>
-                            <input type="time" id="start-time" min="08:00" max="18:00" step="1800" required>
+                            <input type="time" id="start-time" min="08:30" max="17:00" step="1800" required>
                         </div>
                         <div class="form-group">
                             <label for="end-time">Hora de fin</label>
-                            <input type="time" id="end-time" min="08:00" max="18:00" step="1800" required>
+                            <input type="time" id="end-time" min="09:00" max="17:30" step="1800" required>
                         </div>
                     </div>
                     <div class="form-group">
@@ -827,10 +827,46 @@
         let currentYear = new Date().getFullYear();
         let reservations = [];
         
+        // Función para formatear hora en formato legible
+        function formatTime(timeString) {
+            const [hours, minutes] = timeString.split(':');
+            const hour = parseInt(hours);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const formattedHour = hour % 12 || 12;
+            return `${formattedHour}:${minutes} ${ampm}`;
+        }
+        
+        // Función para generar horarios de 30 en 30 minutos desde 8:30 hasta 17:30
+        function generateTimeOptions() {
+            const times = [];
+            for (let hour = 8; hour <= 17; hour++) {
+                // Para las 8:00 solo permitimos 8:30
+                if (hour === 8) {
+                    times.push('08:30');
+                    continue;
+                }
+                
+                // Para las demás horas, generamos :00 y :30
+                for (let minute = 0; minute < 60; minute += 30) {
+                    // Para las 17:00 solo permitimos hasta 17:30
+                    if (hour === 17 && minute === 30) {
+                        times.push('17:30');
+                        break;
+                    }
+                    if (hour === 17 && minute === 0) {
+                        times.push('17:00');
+                    } else if (hour !== 17) {
+                        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                        times.push(timeString);
+                    }
+                }
+            }
+            return times;
+        }
+        
         // Función para cargar reservas desde Supabase
         async function loadReservations() {
             try {
-                showNotification('Cargando reservas...', 'success');
                 const { data, error } = await supabase
                     .from('reservations')
                     .select('*')
@@ -951,7 +987,7 @@
                         <h3>${reservation.responsible} - ${reservation.department}</h3>
                         <p>${reservation.purpose}</p>
                         <div class="reservation-time">
-                            <i class="far fa-clock"></i> ${reservation.start_time} - ${reservation.end_time}
+                            <i class="far fa-clock"></i> ${formatTime(reservation.start_time)} - ${formatTime(reservation.end_time)}
                         </div>
                     </div>
                     <button class="cancel-btn" onclick="cancelReservation(${reservation.id})">
@@ -1048,7 +1084,7 @@
                                 <h3>${reservation.responsible} - ${reservation.department}</h3>
                                 <p>${reservation.purpose}</p>
                                 <div class="reservation-time">
-                                    <i class="far fa-clock"></i> ${reservation.start_time} - ${reservation.end_time}
+                                    <i class="far fa-clock"></i> ${formatTime(reservation.start_time)} - ${formatTime(reservation.end_time)}
                                 </div>
                             </div>
                             <button class="cancel-btn" onclick="cancelReservation(${reservation.id}); closeModal();">
@@ -1081,51 +1117,50 @@
             const timeSlotsContainer = document.getElementById('time-slots');
             timeSlotsContainer.innerHTML = '';
             
-            // Generar slots de media hora desde las 8:00 hasta las 18:00
-            for (let hour = 8; hour < 18; hour++) {
-                for (let minute = 0; minute < 60; minute += 30) {
-                    const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                    const timeSlot = document.createElement('div');
-                    timeSlot.className = 'time-slot';
+            // Generar slots de media hora desde las 8:30 hasta las 17:30
+            const timeOptions = generateTimeOptions();
+            
+            timeOptions.forEach(timeString => {
+                const timeSlot = document.createElement('div');
+                timeSlot.className = 'time-slot';
+                
+                // Verificar si este horario está reservado
+                const isReserved = todayReservations.some(reservation => {
+                    const slotTime = new Date(`1970-01-01T${timeString}`);
+                    const startTime = new Date(`1970-01-01T${reservation.start_time}`);
+                    const endTime = new Date(`1970-01-01T${reservation.end_time}`);
                     
-                    // Verificar si este horario está reservado
-                    const isReserved = todayReservations.some(reservation => {
-                        const slotTime = new Date(`1970-01-01T${timeString}`);
-                        const startTime = new Date(`1970-01-01T${reservation.start_time}`);
-                        const endTime = new Date(`1970-01-01T${reservation.end_time}`);
-                        
-                        return slotTime >= startTime && slotTime < endTime;
-                    });
-                    
-                    if (isReserved) {
-                        timeSlot.classList.add('reserved');
-                        timeSlot.innerHTML = `<i class="fas fa-lock"></i> ${timeString}`;
-                    } else {
-                        timeSlot.textContent = timeString;
-                        timeSlot.addEventListener('click', () => {
-                            // Quitar selección anterior
-                            document.querySelectorAll('.time-slot.selected').forEach(slot => {
-                                slot.classList.remove('selected');
-                            });
-                            
-                            // Seleccionar este slot
-                            timeSlot.classList.add('selected');
-                            
-                            // Establecer la hora en el formulario
-                            document.getElementById('reservation-date').value = today;
-                            document.getElementById('start-time').value = timeString;
-                            
-                            // Calcular hora de fin (30 minutos después)
-                            const endTime = new Date(`1970-01-01T${timeString}`);
-                            endTime.setMinutes(endTime.getMinutes() + 30);
-                            document.getElementById('end-time').value = 
-                                `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`;
+                    return slotTime >= startTime && slotTime < endTime;
+                });
+                
+                if (isReserved) {
+                    timeSlot.classList.add('reserved');
+                    timeSlot.innerHTML = `<i class="fas fa-lock"></i> ${formatTime(timeString)}`;
+                } else {
+                    timeSlot.textContent = formatTime(timeString);
+                    timeSlot.addEventListener('click', () => {
+                        // Quitar selección anterior
+                        document.querySelectorAll('.time-slot.selected').forEach(slot => {
+                            slot.classList.remove('selected');
                         });
-                    }
-                    
-                    timeSlotsContainer.appendChild(timeSlot);
+                        
+                        // Seleccionar este slot
+                        timeSlot.classList.add('selected');
+                        
+                        // Establecer la hora en el formulario
+                        document.getElementById('reservation-date').value = today;
+                        document.getElementById('start-time').value = timeString;
+                        
+                        // Calcular hora de fin (30 minutos después)
+                        const endTime = new Date(`1970-01-01T${timeString}`);
+                        endTime.setMinutes(endTime.getMinutes() + 30);
+                        const endTimeString = `${endTime.getHours().toString().padStart(2, '0')}:${endTime.getMinutes().toString().padStart(2, '0')}`;
+                        document.getElementById('end-time').value = endTimeString;
+                    });
                 }
-            }
+                
+                timeSlotsContainer.appendChild(timeSlot);
+            });
         }
         
         // Función para cancelar una reserva
