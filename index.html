@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sala de Reuniones - Oland Seguros</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
             --white: #ffffff;
@@ -699,12 +700,10 @@
                         <label for="department">Departamento</label>
                         <select id="department" required>
                             <option value="">Seleccione un departamento</option>
-                            <option value="Ventas">Ventas</option>
-                            <option value="Atención al Cliente">Atención al Cliente</option>
-                            <option value="Siniestros">Siniestros</option>
-                            <option value="Administración">Administración</option>
-                            <option value="TI">TI</option>
-                            <option value="Gerencia">Gerencia</option>
+                            <option value="SISTEMAS">SISTEMAS</option>
+                            <option value="ASISTENCIA MEDICA">ASISTENCIA MEDICA</option>
+                            <option value="RAMOS GENERALES">RAMOS GENERALES</option>
+                            <option value="SINIESTROS">SINIESTROS</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -814,52 +813,74 @@
     </footer>
 
     <script>
-        // El código JavaScript permanece igual que en la versión anterior
-        // Solo se ha mejorado el CSS para una apariencia más minimalista
+        // =============================================
+        // CONFIGURACIÓN DE SUPABASE
+        // =============================================
+        const SUPABASE_URL = 'https://yadojzblxxilvjpoqdla.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhZG9qemJseHhpbHZqcG9xZGxhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTY5NzMyMSwiZXhwIjoyMDc3MjczMzIxfQ.M4uSzFW96KVYxQFtboZOJcMxAgNbdRvfZXbOmz3MH7M';
         
-        // Usamos localStorage para persistir los datos en el navegador
-        const STORAGE_KEY = 'oland-seguros-reservas';
-        
-        // Cargar reservas desde localStorage o inicializar array vacío
-        let reservations = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [
-            // Datos de ejemplo para demostración
-            {
-                id: 1,
-                date: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
-                startTime: "09:00",
-                endTime: "10:30",
-                responsible: "María González",
-                department: "Ventas",
-                purpose: "Revisión de metas mensuales"
-            },
-            {
-                id: 2,
-                date: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
-                startTime: "14:00",
-                endTime: "15:30",
-                responsible: "Carlos Rodríguez",
-                department: "Atención al Cliente",
-                purpose: "Capacitación de nuevos procedimientos"
-            },
-            {
-                id: 3,
-                date: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().split('T')[0],
-                startTime: "11:00",
-                endTime: "12:30",
-                responsible: "Ana Martínez",
-                department: "Siniestros",
-                purpose: "Análisis de casos complejos"
-            }
-        ];
-        
-        // Guardar reservas en localStorage
-        function saveReservations() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(reservations));
-        }
+        // Inicializar Supabase
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         // Variables globales para el calendario
         let currentMonth = new Date().getMonth();
         let currentYear = new Date().getFullYear();
+        let reservations = [];
+        
+        // Función para cargar reservas desde Supabase
+        async function loadReservations() {
+            try {
+                showNotification('Cargando reservas...', 'success');
+                const { data, error } = await supabase
+                    .from('reservations')
+                    .select('*')
+                    .order('date', { ascending: true })
+                    .order('start_time', { ascending: true });
+                
+                if (error) throw error;
+                
+                reservations = data || [];
+                return reservations;
+            } catch (error) {
+                console.error('Error cargando reservas:', error);
+                showNotification('Error al cargar las reservas', 'error');
+                return [];
+            }
+        }
+        
+        // Función para guardar reserva en Supabase
+        async function saveReservation(reservation) {
+            try {
+                const { data, error } = await supabase
+                    .from('reservations')
+                    .insert([reservation])
+                    .select();
+                
+                if (error) throw error;
+                
+                return data[0];
+            } catch (error) {
+                console.error('Error guardando reserva:', error);
+                throw error;
+            }
+        }
+        
+        // Función para eliminar reserva de Supabase
+        async function deleteReservation(id) {
+            try {
+                const { error } = await supabase
+                    .from('reservations')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                return true;
+            } catch (error) {
+                console.error('Error eliminando reserva:', error);
+                throw error;
+            }
+        }
         
         // Función para mostrar notificaciones
         function showNotification(message, type = 'success') {
@@ -900,7 +921,9 @@
         }
         
         // Función para mostrar las reservas de hoy
-        function displayTodayReservations() {
+        async function displayTodayReservations() {
+            await loadReservations();
+            
             const today = new Date().toISOString().split('T')[0];
             const todayReservations = reservations.filter(reservation => {
                 return reservation.date === today;
@@ -925,10 +948,10 @@
                 reservationElement.className = 'reservation-item';
                 reservationElement.innerHTML = `
                     <div class="reservation-info">
-                        <h3>${reservation.responsable} - ${reservation.department}</h3>
+                        <h3>${reservation.responsible} - ${reservation.department}</h3>
                         <p>${reservation.purpose}</p>
                         <div class="reservation-time">
-                            <i class="far fa-clock"></i> ${reservation.startTime} - ${reservation.endTime}
+                            <i class="far fa-clock"></i> ${reservation.start_time} - ${reservation.end_time}
                         </div>
                     </div>
                     <button class="cancel-btn" onclick="cancelReservation(${reservation.id})">
@@ -940,7 +963,9 @@
         }
         
         // Función para generar el calendario
-        function generateCalendar() {
+        async function generateCalendar() {
+            await loadReservations();
+            
             const calendar = document.getElementById('calendar');
             calendar.innerHTML = '';
             
@@ -1020,10 +1045,10 @@
                     html += `
                         <div class="reservation-item">
                             <div class="reservation-info">
-                                <h3>${reservation.responsable} - ${reservation.department}</h3>
+                                <h3>${reservation.responsible} - ${reservation.department}</h3>
                                 <p>${reservation.purpose}</p>
                                 <div class="reservation-time">
-                                    <i class="far fa-clock"></i> ${reservation.startTime} - ${reservation.endTime}
+                                    <i class="far fa-clock"></i> ${reservation.start_time} - ${reservation.end_time}
                                 </div>
                             </div>
                             <button class="cancel-btn" onclick="cancelReservation(${reservation.id}); closeModal();">
@@ -1045,7 +1070,9 @@
         }
         
         // Función para generar horarios disponibles para hoy
-        function generateTimeSlots() {
+        async function generateTimeSlots() {
+            await loadReservations();
+            
             const today = new Date().toISOString().split('T')[0];
             const todayReservations = reservations.filter(reservation => {
                 return reservation.date === today;
@@ -1064,8 +1091,8 @@
                     // Verificar si este horario está reservado
                     const isReserved = todayReservations.some(reservation => {
                         const slotTime = new Date(`1970-01-01T${timeString}`);
-                        const startTime = new Date(`1970-01-01T${reservation.startTime}`);
-                        const endTime = new Date(`1970-01-01T${reservation.endTime}`);
+                        const startTime = new Date(`1970-01-01T${reservation.start_time}`);
+                        const endTime = new Date(`1970-01-01T${reservation.end_time}`);
                         
                         return slotTime >= startTime && slotTime < endTime;
                     });
@@ -1102,19 +1129,23 @@
         }
         
         // Función para cancelar una reserva
-        function cancelReservation(id) {
+        async function cancelReservation(id) {
             if (confirm('¿Está seguro de que desea cancelar esta reserva?')) {
-                reservations = reservations.filter(reservation => reservation.id !== id);
-                saveReservations();
-                displayTodayReservations();
-                generateCalendar();
-                generateTimeSlots();
-                showNotification('Reserva cancelada exitosamente.');
+                try {
+                    await deleteReservation(id);
+                    await loadReservations();
+                    displayTodayReservations();
+                    generateCalendar();
+                    generateTimeSlots();
+                    showNotification('Reserva cancelada exitosamente.');
+                } catch (error) {
+                    showNotification('Error al cancelar la reserva', 'error');
+                }
             }
         }
         
         // Manejar el envío del formulario de reserva
-        document.getElementById('reservation-form').addEventListener('submit', function(e) {
+        document.getElementById('reservation-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const date = document.getElementById('reservation-date').value;
@@ -1131,13 +1162,14 @@
             }
             
             // Validar que no haya conflictos de horario
+            await loadReservations();
             const hasConflict = reservations.some(reservation => {
                 if (reservation.date !== date) {
                     return false;
                 }
                 
                 // Verificar si hay superposición de horarios
-                return !(endTime <= reservation.startTime || startTime >= reservation.endTime);
+                return !(endTime <= reservation.start_time || startTime >= reservation.end_time);
             });
             
             if (hasConflict) {
@@ -1147,31 +1179,33 @@
             
             // Crear nueva reserva
             const newReservation = {
-                id: reservations.length > 0 ? Math.max(...reservations.map(r => r.id)) + 1 : 1,
                 date: date,
-                startTime: startTime,
-                endTime: endTime,
+                start_time: startTime,
+                end_time: endTime,
                 responsible: responsible,
                 department: department,
                 purpose: purpose
             };
             
-            reservations.push(newReservation);
-            saveReservations();
-            
-            // Limpiar formulario
-            document.getElementById('reservation-form').reset();
-            
-            // Establecer la fecha actual por defecto
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('reservation-date').value = today;
-            
-            // Actualizar la interfaz
-            displayTodayReservations();
-            generateCalendar();
-            generateTimeSlots();
-            
-            showNotification('Reserva realizada exitosamente.');
+            try {
+                await saveReservation(newReservation);
+                
+                // Limpiar formulario
+                document.getElementById('reservation-form').reset();
+                
+                // Establecer la fecha actual por defecto
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('reservation-date').value = today;
+                
+                // Actualizar la interfaz
+                await displayTodayReservations();
+                await generateCalendar();
+                await generateTimeSlots();
+                
+                showNotification('Reserva realizada exitosamente.');
+            } catch (error) {
+                showNotification('Error al realizar la reserva', 'error');
+            }
         });
         
         // Inicializar la aplicación
