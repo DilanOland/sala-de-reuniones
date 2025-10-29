@@ -890,6 +890,7 @@
                     <option value="RAMOS GENERALES">RAMOS GENERALES</option>
                     <option value="SINIESTROS">SINIESTROS</option>
                     <option value="GERENCIA">GERENCIA</option>
+                    <option value="SAYO">SAYO</option>
                 </select>
                 <input type="password" class="auth-input" id="register-password" placeholder="Crea una contraseña" minlength="6" required>
                 <input type="password" class="auth-input" id="register-confirm-password" placeholder="Confirma tu contraseña" required>
@@ -964,6 +965,8 @@
                             <option value="ASISTENCIA MEDICA">ASISTENCIA MEDICA</option>
                             <option value="RAMOS GENERALES">RAMOS GENERALES</option>
                             <option value="SINIESTROS">SINIESTROS</option>
+                            <option value="GERENCIA">GERENCIA</option>
+                            <option value="SAYO">SAYO</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -1114,6 +1117,11 @@
             document.getElementById('user-display-name').textContent = currentUser.nombre_completo;
             document.getElementById('user-avatar').textContent = currentUser.nombre_completo.charAt(0).toUpperCase();
             
+            // AUTO-LLENAR EL DEPARTAMENTO DEL USUARIO
+            if (currentUser && currentUser.departamento) {
+                document.getElementById('department').value = currentUser.departamento;
+            }
+            
             // Cargar datos
             updateCurrentDate();
             displayTodayReservations();
@@ -1167,7 +1175,7 @@
             }
         }
 
-        // Función para hacer login
+        // Función para hacer login - CON MENSAJE "CONTRASEÑA INCORRECTA"
         async function loginUser(email, password) {
             try {
                 // Buscar usuario en la base de datos
@@ -1190,7 +1198,7 @@
                 // En un caso real, aquí verificarías la contraseña hasheada
                 // Por ahora, usaremos una verificación básica
                 if (user.password_hash !== password) {
-                    showNotification('Contraseña incorrecta', 'error');
+                    showNotification('Contraseña incorrecta', 'error'); // MENSAJE ESPECÍFICO
                     return false;
                 }
 
@@ -1233,6 +1241,10 @@
             document.getElementById('register-tab').classList.remove('active');
             document.getElementById('login-form').classList.add('active');
             document.getElementById('register-form').classList.remove('active');
+            
+            // Limpiar campos del formulario de login
+            document.getElementById('login-email').value = '';
+            document.getElementById('login-password').value = '';
         }
 
         function switchToRegisterTab() {
@@ -1240,6 +1252,13 @@
             document.getElementById('login-tab').classList.remove('active');
             document.getElementById('register-form').classList.add('active');
             document.getElementById('login-form').classList.remove('active');
+            
+            // Limpiar campos del formulario de registro
+            document.getElementById('register-name').value = '';
+            document.getElementById('register-email').value = '';
+            document.getElementById('register-department').value = '';
+            document.getElementById('register-password').value = '';
+            document.getElementById('register-confirm-password').value = '';
         }
 
         // Función para verificar si el usuario actual es el propietario de una reserva
@@ -1721,8 +1740,11 @@
             try {
                 await saveReservation(newReservation);
                 
-                // Limpiar formulario
+                // Limpiar formulario (excepto el departamento)
                 document.getElementById('reservation-form').reset();
+                
+                // Restaurar el departamento del usuario
+                document.getElementById('department').value = currentUser.departamento;
                 
                 // Establecer la fecha actual por defecto
                 const today = new Date().toISOString().split('T')[0];
@@ -1753,6 +1775,12 @@
                 e.preventDefault();
                 const email = document.getElementById('login-email').value;
                 const password = document.getElementById('login-password').value;
+                
+                if (!email || !password) {
+                    showNotification('Por favor completa todos los campos', 'error');
+                    return;
+                }
+                
                 await loginUser(email, password);
             });
 
@@ -1766,6 +1794,13 @@
                     password: document.getElementById('register-password').value,
                     confirmPassword: document.getElementById('register-confirm-password').value
                 };
+                
+                // Validar que todos los campos estén completos
+                if (!userData.nombre_completo || !userData.email || !userData.departamento || !userData.password || !userData.confirmPassword) {
+                    showNotification('Por favor completa todos los campos', 'error');
+                    return;
+                }
+                
                 await registerUser(userData);
             });
 
