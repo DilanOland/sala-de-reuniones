@@ -1152,15 +1152,17 @@
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         // =============================================
-        // CONFIGURACIÓN DE MSAL PARA OFFICE 365
+        // CONFIGURACIÓN CORREGIDA DE MSAL - TENANT ESPECÍFICO
         // =============================================
         
-        // CLIENT ID DE AZURE AD INTEGRADO
+        // OPCIÓN 1: Usar tu Tenant ID específico (RECOMENDADO)
+        // Reemplaza "TU_TENANT_ID" con el ID de tu tenant de Oland Seguros
         const msalConfig = {
             auth: {
                 clientId: "f0a6d39d-c51f-4969-81be-1d22aa3036e0",
-                authority: "https://login.microsoftonline.com/common",
+                authority: "https://login.microsoftonline.com/olandseguros.com", // Usa tu dominio
                 redirectUri: window.location.origin,
+                knownAuthorities: ["login.microsoftonline.com"]
             },
             cache: {
                 cacheLocation: "localStorage",
@@ -1168,12 +1170,25 @@
             }
         };
 
+        // OPCIÓN ALTERNATIVA: Si no conoces tu Tenant ID, usa esta configuración
+        // const msalConfig = {
+        //     auth: {
+        //         clientId: "f0a6d39d-c51f-4969-81be-1d22aa3036e0",
+        //         authority: "https://login.microsoftonline.com/organizations",
+        //         redirectUri: window.location.origin,
+        //     },
+        //     cache: {
+        //         cacheLocation: "localStorage",
+        //         storeAuthStateInCookie: true,
+        //     }
+        // };
+
         // Crear instancia de MSAL
         const msalInstance = new msal.PublicClientApplication(msalConfig);
 
         // Scopes para Microsoft Graph API
         const loginRequest = {
-            scopes: ["User.Read", "Calendars.ReadWrite", "email"]
+            scopes: ["User.Read", "Calendars.ReadWrite", "email", "profile"]
         };
 
         // Variables globales
@@ -1255,10 +1270,18 @@
                 
                 const userData = await userResponse.json();
                 
+                // Verificar que el email sea del dominio de Oland Seguros
+                const userEmail = userData.mail || userData.userPrincipalName;
+                if (!userEmail.includes('@olandseguros.com')) {
+                    showNotification('Solo se permiten cuentas corporativas de Oland Seguros', 'error');
+                    await msalInstance.logout();
+                    return;
+                }
+                
                 // Crear objeto de usuario para nuestra aplicación
                 const userSession = {
                     id: userData.id,
-                    email: userData.mail || userData.userPrincipalName,
+                    email: userEmail,
                     nombre_completo: userData.displayName,
                     departamento: "POR_DEFINIR",
                     loginTime: new Date().toISOString(),
@@ -1325,7 +1348,13 @@
                 await msalInstance.loginRedirect(loginRequest);
             } catch (error) {
                 console.error('Error en login con Office 365:', error);
-                showNotification('Error al conectar con Office 365', 'error');
+                
+                // Mostrar mensaje de error específico
+                if (error.errorCode && error.errorCode.includes('interaction_required')) {
+                    showNotification('Se requiere interacción adicional. Intenta nuevamente.', 'error');
+                } else {
+                    showNotification('Error al conectar con Office 365: ' + error.message, 'error');
+                }
             }
         }
 
@@ -1357,6 +1386,7 @@
             populateTimeSelects();
         }
 
+        // [El resto del código JavaScript permanece igual...]
         // Función para validar email
         function isValidEmail(email) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
