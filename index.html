@@ -1152,17 +1152,19 @@
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         
         // =============================================
-        // CONFIGURACIÓN DE MSAL (Microsoft Authentication Library)
+        // CONFIGURACIÓN DE MSAL PARA OFFICE 365
         // =============================================
+        
+        // CLIENT ID DE AZURE AD INTEGRADO
         const msalConfig = {
             auth: {
-                clientId: "TU_CLIENT_ID_AQUI", // Reemplazar con el Client ID de tu aplicación Azure AD
-                authority: "https://login.microsoftonline.com/common", // Para multi-tenant
+                clientId: "f0a6d39d-c51f-4969-81be-1d22aa3036e0",
+                authority: "https://login.microsoftonline.com/common",
                 redirectUri: window.location.origin,
             },
             cache: {
                 cacheLocation: "localStorage",
-                storeAuthStateInCookie: false,
+                storeAuthStateInCookie: true,
             }
         };
 
@@ -1171,7 +1173,7 @@
 
         // Scopes para Microsoft Graph API
         const loginRequest = {
-            scopes: ["User.Read", "Calendars.ReadWrite"]
+            scopes: ["User.Read", "Calendars.ReadWrite", "email"]
         };
 
         // Variables globales
@@ -1180,15 +1182,37 @@
         let reservations = [];
         let currentUser = null;
 
-        // Función para inicializar el usuario
-        function initializeUser() {
+        // Función para inicializar MSAL
+        async function initializeMSAL() {
+            try {
+                await msalInstance.initialize();
+                console.log("MSAL inicializado correctamente");
+                
+                // Manejar redirección después del login
+                const response = await msalInstance.handleRedirectPromise();
+                if (response) {
+                    await handleOffice365Login(response);
+                    return;
+                }
+                
+                // Verificar si hay una sesión activa
+                await checkOffice365Session();
+                
+            } catch (error) {
+                console.error("Error inicializando MSAL:", error);
+                // Si hay error con MSAL, verificar usuario local
+                checkLocalUser();
+            }
+        }
+
+        // Función para verificar usuario local
+        function checkLocalUser() {
             const savedUser = localStorage.getItem('oland-user');
             if (savedUser) {
                 currentUser = JSON.parse(savedUser);
                 showMainApp();
             } else {
-                // Verificar si hay una sesión activa de Office 365
-                checkOffice365Session();
+                showAuthModal();
             }
         }
 
@@ -1206,11 +1230,11 @@
                     const response = await msalInstance.acquireTokenSilent(silentRequest);
                     await handleOffice365Login(response);
                 } else {
-                    showAuthModal();
+                    checkLocalUser();
                 }
             } catch (error) {
                 console.log("No hay sesión activa de Office 365:", error);
-                showAuthModal();
+                checkLocalUser();
             }
         }
 
@@ -1220,7 +1244,8 @@
                 // Obtener información del usuario desde Microsoft Graph
                 const userResponse = await fetch("https://graph.microsoft.com/v1.0/me", {
                     headers: {
-                        'Authorization': `Bearer ${response.accessToken}`
+                        'Authorization': `Bearer ${response.accessToken}`,
+                        'Content-Type': 'application/json'
                     }
                 });
                 
@@ -1235,7 +1260,7 @@
                     id: userData.id,
                     email: userData.mail || userData.userPrincipalName,
                     nombre_completo: userData.displayName,
-                    departamento: "POR_DEFINIR", // Se puede obtener del perfil si está disponible
+                    departamento: "POR_DEFINIR",
                     loginTime: new Date().toISOString(),
                     office365Token: response.accessToken,
                     isOffice365User: true
@@ -1252,6 +1277,15 @@
                     // Actualizar datos del usuario existente
                     userSession.departamento = existingUser.departamento;
                     userSession.id = existingUser.id;
+                    
+                    // Actualizar información en la base de datos
+                    await supabase
+                        .from('usuarios')
+                        .update({
+                            office365_id: userData.id,
+                            ultimo_login: new Date().toISOString()
+                        })
+                        .eq('id', existingUser.id);
                 } else {
                     // Crear nuevo usuario en nuestra base de datos
                     const { data: newUser, error: insertError } = await supabase
@@ -1261,11 +1295,12 @@
                             nombre_completo: userSession.nombre_completo,
                             departamento: userSession.departamento,
                             office365_id: userSession.id,
-                            activo: true
+                            activo: true,
+                            ultimo_login: new Date().toISOString()
                         }])
                         .select();
 
-                    if (!insertError && newUser) {
+                    if (!insertError && newUser && newUser.length > 0) {
                         userSession.id = newUser[0].id;
                     }
                 }
@@ -1287,11 +1322,10 @@
         // Función para iniciar sesión con Office 365
         async function loginWithOffice365() {
             try {
-                const response = await msalInstance.loginPopup(loginRequest);
-                await handleOffice365Login(response);
+                await msalInstance.loginRedirect(loginRequest);
             } catch (error) {
                 console.error('Error en login con Office 365:', error);
-                showNotification('Error al iniciar sesión con Office 365', 'error');
+                showNotification('Error al conectar con Office 365', 'error');
             }
         }
 
@@ -1323,9 +1357,6 @@
             populateTimeSelects();
         }
 
-        // Resto del código permanece igual...
-        // [El resto del código JavaScript permanece igual que en la versión anterior]
-
         // Función para validar email
         function isValidEmail(email) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1334,7 +1365,6 @@
 
         // Función para validar fortaleza de contraseña
         function isPasswordStrong(password) {
-            // Mínimo 6 caracteres, al menos una letra y un número
             const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/;
             return passwordRegex.test(password);
         }
@@ -1342,25 +1372,21 @@
         // Función para registrar un nuevo usuario
         async function registerUser(userData) {
             try {
-                // Validar email
                 if (!isValidEmail(userData.email)) {
                     showNotification('Por favor ingresa un email válido', 'error');
                     return false;
                 }
 
-                // Validar fortaleza de contraseña
                 if (!isPasswordStrong(userData.password)) {
                     showNotification('La contraseña debe tener al menos 6 caracteres, incluyendo letras y números', 'error');
                     return false;
                 }
 
-                // Verificar si las contraseñas coinciden
                 if (userData.password !== userData.confirmPassword) {
                     showNotification('Las contraseñas no coinciden', 'error');
                     return false;
                 }
 
-                // Verificar si el usuario ya existe
                 const { data: existingUser, error: checkError } = await supabase
                     .from('usuarios')
                     .select('id')
@@ -1372,14 +1398,13 @@
                     return false;
                 }
 
-                // Insertar nuevo usuario
                 const { data, error } = await supabase
                     .from('usuarios')
                     .insert([{
                         email: userData.email,
                         nombre_completo: userData.nombre_completo,
                         departamento: userData.departamento,
-                        password_hash: userData.password // En un caso real, esto debería estar hasheado
+                        password_hash: userData.password
                     }])
                     .select();
 
@@ -1396,16 +1421,14 @@
             }
         }
 
-        // Función para hacer login - CON MENSAJE "CONTRASEÑA INCORRECTA"
+        // Función para hacer login
         async function loginUser(email, password) {
             try {
-                // Validar email
                 if (!isValidEmail(email)) {
                     showNotification('Por favor ingresa un email válido', 'error');
                     return false;
                 }
 
-                // Buscar usuario en la base de datos
                 const { data: user, error } = await supabase
                     .from('usuarios')
                     .select('*')
@@ -1422,14 +1445,11 @@
                     return false;
                 }
 
-                // En un caso real, aquí verificarías la contraseña hasheada
-                // Por ahora, usaremos una verificación básica
                 if (user.password_hash !== password) {
-                    showNotification('Contraseña incorrecta', 'error'); // MENSAJE ESPECÍFICO
+                    showNotification('Contraseña incorrecta', 'error');
                     return false;
                 }
 
-                // Guardar usuario en localStorage (sin la contraseña)
                 const userSession = {
                     id: user.id,
                     email: user.email,
@@ -1455,7 +1475,6 @@
         // Función para hacer logout
         function logoutUser() {
             if (confirm('¿Estás seguro de que quieres salir?')) {
-                // Si es usuario de Office 365, cerrar sesión también en Microsoft
                 if (currentUser && currentUser.isOffice365User) {
                     msalInstance.logoutPopup().catch(error => {
                         console.error('Error al cerrar sesión de Office 365:', error);
@@ -1476,7 +1495,6 @@
             document.getElementById('login-form').classList.add('active');
             document.getElementById('register-form').classList.remove('active');
             
-            // Limpiar campos del formulario de login
             document.getElementById('login-email').value = '';
             document.getElementById('login-password').value = '';
         }
@@ -1487,7 +1505,6 @@
             document.getElementById('register-form').classList.add('active');
             document.getElementById('login-form').classList.remove('active');
             
-            // Limpiar campos del formulario de registro
             document.getElementById('register-name').value = '';
             document.getElementById('register-email').value = '';
             document.getElementById('register-department').value = '';
@@ -1525,11 +1542,9 @@
             const startTimeSelect = document.getElementById('start-time');
             const endTimeSelect = document.getElementById('end-time');
             
-            // Limpiar selects
             startTimeSelect.innerHTML = '<option value="">Seleccione hora de inicio</option>';
             endTimeSelect.innerHTML = '<option value="">Seleccione hora de fin</option>';
             
-            // Poblar opciones de inicio (excluyendo la última opción)
             timeOptions.slice(0, -1).forEach(time => {
                 const option = document.createElement('option');
                 option.value = time;
@@ -1537,7 +1552,6 @@
                 startTimeSelect.appendChild(option);
             });
             
-            // Poblar opciones de fin (excluyendo la primera opción)
             timeOptions.slice(1).forEach(time => {
                 const option = document.createElement('option');
                 option.value = time;
@@ -1546,7 +1560,7 @@
             });
         }
 
-        // Función para actualizar las opciones de hora de fin basadas en la hora de inicio seleccionada
+        // Función para actualizar las opciones de hora de fin
         function updateEndTimeOptions() {
             const startTime = document.getElementById('start-time').value;
             const endTimeSelect = document.getElementById('end-time');
@@ -1557,13 +1571,10 @@
                 return;
             }
             
-            // Limpiar opciones de fin
             endTimeSelect.innerHTML = '<option value="">Seleccione hora de fin</option>';
             
-            // Encontrar el índice de la hora de inicio seleccionada
             const startIndex = timeOptions.indexOf(startTime);
             
-            // Poblar solo las horas posteriores a la hora de inicio seleccionada
             if (startIndex !== -1) {
                 timeOptions.slice(startIndex + 1).forEach(time => {
                     const option = document.createElement('option');
@@ -1721,33 +1732,27 @@
             const calendar = document.getElementById('calendar');
             calendar.innerHTML = '';
             
-            // Actualizar el título del mes actual
             const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                 "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
             ];
             document.getElementById('current-month').textContent = 
                 `${monthNames[currentMonth]} ${currentYear}`;
             
-            // Obtener el primer día del mes
             const firstDay = new Date(currentYear, currentMonth, 1);
-            // Obtener el último día del mes
             const lastDay = new Date(currentYear, currentMonth + 1, 0);
             
-            // Rellenar días vacíos al inicio del mes
             for (let i = 0; i < firstDay.getDay(); i++) {
                 const emptyDay = document.createElement('div');
                 emptyDay.className = 'calendar-day';
                 calendar.appendChild(emptyDay);
             }
             
-            // Generar los días del mes
             const today = new Date();
             for (let day = 1; day <= lastDay.getDate(); day++) {
                 const dayElement = document.createElement('div');
                 const currentDate = new Date(currentYear, currentMonth, day);
                 const dateString = currentDate.toISOString().split('T')[0];
                 
-                // Verificar si hay reservas para este día
                 const dayReservations = reservations.filter(reservation => {
                     return reservation.date === dateString;
                 });
@@ -1757,7 +1762,6 @@
                     dayElement.classList.add('reserved');
                 }
                 
-                // Marcar el día actual
                 if (currentDate.toDateString() === today.toDateString()) {
                     dayElement.classList.add('today');
                 }
@@ -1767,7 +1771,6 @@
                     ${dayReservations.length > 0 ? `<span class="reservation-badge">${dayReservations.length}</span>` : ''}
                 `;
                 
-                // Agregar evento de clic para mostrar detalles del día
                 dayElement.addEventListener('click', () => showDayDetails(dateString, dayReservations));
                 
                 calendar.appendChild(dayElement);
@@ -1839,14 +1842,12 @@
             const timeSlotsContainer = document.getElementById('time-slots');
             timeSlotsContainer.innerHTML = '';
             
-            // Generar slots de media hora desde las 8:30 hasta las 17:30
             const timeOptions = generateTimeOptions();
             
             timeOptions.forEach(timeString => {
                 const timeSlot = document.createElement('div');
                 timeSlot.className = 'time-slot';
                 
-                // Verificar si este horario está reservado
                 const isReserved = todayReservations.some(reservation => {
                     const slotTime = new Date(`1970-01-01T${timeString}`);
                     const startTime = new Date(`1970-01-01T${reservation.start_time}`);
@@ -1861,22 +1862,17 @@
                 } else {
                     timeSlot.textContent = formatTime(timeString);
                     timeSlot.addEventListener('click', () => {
-                        // Quitar selección anterior
                         document.querySelectorAll('.time-slot.selected').forEach(slot => {
                             slot.classList.remove('selected');
                         });
                         
-                        // Seleccionar este slot
                         timeSlot.classList.add('selected');
                         
-                        // Establecer la hora en el formulario
                         document.getElementById('reservation-date').value = today;
                         
-                        // Establecer hora de inicio
                         const startTimeSelect = document.getElementById('start-time');
                         startTimeSelect.value = timeString;
                         
-                        // Actualizar opciones de hora de fin
                         updateEndTimeOptions();
                     });
                 }
@@ -1932,26 +1928,22 @@
             const department = document.getElementById('department').value;
             const purpose = document.getElementById('purpose').value;
             
-            // Validar que se hayan seleccionado horas
             if (!startTime || !endTime) {
                 showNotification('Por favor selecciona tanto la hora de inicio como la de fin', 'error');
                 return;
             }
             
-            // Validar que la hora de fin sea posterior a la hora de inicio
             if (startTime >= endTime) {
                 showNotification('La hora de fin debe ser posterior a la hora de inicio.', 'error');
                 return;
             }
             
-            // Validar que no haya conflictos de horario
             await loadReservations();
             const hasConflict = reservations.some(reservation => {
                 if (reservation.date !== date) {
                     return false;
                 }
                 
-                // Verificar si hay superposición de horarios
                 return !(endTime <= reservation.start_time || startTime >= reservation.end_time);
             });
             
@@ -1960,7 +1952,6 @@
                 return;
             }
             
-            // Crear nueva reserva
             const newReservation = {
                 date: date,
                 start_time: startTime,
@@ -1974,20 +1965,15 @@
             try {
                 await saveReservation(newReservation);
                 
-                // Limpiar formulario (excepto el departamento)
                 document.getElementById('reservation-form').reset();
                 
-                // Restaurar el departamento del usuario
                 document.getElementById('department').value = currentUser.departamento;
                 
-                // Establecer la fecha actual por defecto
                 const today = new Date().toISOString().split('T')[0];
                 document.getElementById('reservation-date').value = today;
                 
-                // Restablecer selects de hora
                 populateTimeSelects();
                 
-                // Actualizar la interfaz
                 await displayTodayReservations();
                 await generateCalendar();
                 await generateTimeSlots();
@@ -2032,7 +2018,6 @@
                     confirmPassword: document.getElementById('register-confirm-password').value
                 };
                 
-                // Validar que todos los campos estén completos
                 if (!userData.nombre_completo || !userData.email || !userData.departamento || !userData.password || !userData.confirmPassword) {
                     showNotification('Por favor completa todos los campos', 'error');
                     return;
@@ -2044,15 +2029,7 @@
             document.getElementById('logout-btn').addEventListener('click', logoutUser);
 
             // Inicializar MSAL
-            msalInstance.initialize().then(() => {
-                console.log("MSAL inicializado correctamente");
-                // Inicializar usuario después de que MSAL esté listo
-                initializeUser();
-            }).catch(error => {
-                console.error("Error inicializando MSAL:", error);
-                // Si hay error con MSAL, inicializar de todos modos
-                initializeUser();
-            });
+            initializeMSAL();
             
             // Establecer la fecha mínima en el formulario como hoy
             const today = new Date().toISOString().split('T')[0];
